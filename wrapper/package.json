@@ -1,0 +1,13 @@
+{
+  "name": "neo4j-decisive-wrapper-poc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minimal Neo4j POC wrapper — only neo4j-driver (official Bolt client).",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "neo4j-driver": "^5.28.1"
+  }
+}

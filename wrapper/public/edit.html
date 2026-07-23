@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Edit node — KOP decomp POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Edit node</h1>
+        <p class="muted">
+          Properties, relationships, relink, and delete.
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="/">KOP decomp</a>
+        <a class="site-nav-link" href="/graph.html">Graph</a>
+        <a class="site-nav-link active" href="/manage.html">Manage</a>
+        <a class="site-nav-link" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="edit-main">
+      <p id="editStatus" class="muted">Loading…</p>
+
+      <form id="editForm" class="card form edit-form" hidden>
+        <h2>Properties</h2>
+        <label>
+          Id (immutable)
+          <input id="editId" type="text" readonly />
+        </label>
+        <label>
+          Primary label
+          <select id="editLabel" name="label">
+            <option>Objective</option>
+            <option>FunctionalCapability</option>
+            <option>CapabilitySolution</option>
+            <option>Actor</option>
+            <option>Measure</option>
+            <option>Project</option>
+            <option>Artifact</option>
+          </select>
+        </label>
+        <div id="propFields" class="prop-fields"></div>
+        <div class="row">
+          <button type="button" id="addPropBtn" class="secondary">Add property</button>
+          <button type="submit">Save changes</button>
+        </div>
+        <pre id="editOut" class="out"></pre>
+      </form>
+
+      <section id="relsSection" class="card form" hidden>
+        <h2>Relationships</h2>
+        <p class="muted">Edges connected to this node.</p>
+        <div id="relsList" class="rels-list"></div>
+        <p id="relsStatus" class="muted"></p>
+
+        <h3>Create relationship</h3>
+        <form id="createRelForm" class="form">
+          <label>
+            From id
+            <input name="fromId" id="relFromId" required />
+          </label>
+          <label>
+            Relationship
+            <select name="relationship" id="relType">
+              <option>DECOMPOSES_TO</option>
+              <option>HAS_APPROACH</option>
+              <option>NEXT</option>
+              <option>SATISFIED_BY</option>
+              <option>PERFORMED_BY</option>
+              <option>MEASURES</option>
+              <option>REQUIRES</option>
+              <option>PERFORMS</option>
+              <option>SUPPORTS</option>
+              <option>PART_OF</option>
+              <option>RELATED_TO</option>
+            </select>
+          </label>
+          <label>
+            To id
+            <input name="toId" id="relToId" required />
+          </label>
+          <button type="submit">Create relationship</button>
+        </form>
+        <pre id="relOut" class="out"></pre>
+
+        <h3>Relink / reparent</h3>
+        <p class="muted">
+          Move this node under a new parent for one relationship type (removes old parent edge(s) of that type, then links the new parent).
+        </p>
+        <form id="relinkForm" class="form">
+          <label>
+            Relationship
+            <select name="relationship" id="relinkType">
+              <option>DECOMPOSES_TO</option>
+              <option selected>HAS_APPROACH</option>
+              <option>NEXT</option>
+              <option>SATISFIED_BY</option>
+              <option>PERFORMED_BY</option>
+              <option>MEASURES</option>
+              <option>PART_OF</option>
+            </select>
+          </label>
+          <label>
+            Old parent id (optional — blank = all current parents of that type)
+            <input name="oldParentId" placeholder="e.g. KTP-…" />
+          </label>
+          <label>
+            New parent id
+            <input name="newParentId" required placeholder="e.g. KOP-07" />
+          </label>
+          <label>
+            Direction
+            <select name="childIsTarget">
+              <option value="true" selected>Parent → this node (typical hierarchy)</option>
+              <option value="false">This node → parent (e.g. MEASURES)</option>
+            </select>
+          </label>
+          <button type="submit">Relink</button>
+        </form>
+        <pre id="relinkOut" class="out"></pre>
+      </section>
+
+      <section id="deleteSection" class="card form danger-card" hidden>
+        <h2>Delete node</h2>
+        <p class="muted">
+          Permanently removes this node. By default relationships are detached (removed with the node).
+        </p>
+        <label class="check-row">
+          <input type="checkbox" id="detachCheck" checked />
+          Detach delete (remove relationships too)
+        </label>
+        <button type="button" id="deleteBtn" class="danger">Delete this node</button>
+        <pre id="deleteOut" class="out"></pre>
+      </section>
+    </main>
+
+    <script src="/edit.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Graph — Decisive Neo4j POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Mission engineering graph lab</h1>
+        <p class="muted">Browse and interact with the whole graph.</p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="/">KOP decomp</a>
+        <a class="site-nav-link active" href="/graph.html">Graph</a>
+        <a class="site-nav-link" href="/manage.html">Manage</a>
+        <a class="site-nav-link" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="graph-layout">
+      <aside class="card graph-controls">
+        <h2>Search &amp; filters</h2>
+        <label>
+          Node search
+          <input id="graphSearch" type="search" placeholder="Id or name…" autocomplete="off" />
+        </label>
+        <label>
+          Label
+          <select id="graphLabel">
+            <option value="">All labels</option>
+          </select>
+        </label>
+        <label>
+          meLevel
+          <select id="graphMeLevel">
+            <option value="">All meLevels</option>
+          </select>
+        </label>
+        <label>
+          Max nodes
+          <select id="graphLimit">
+            <option value="100">100</option>
+            <option value="200" selected>200</option>
+            <option value="400">400</option>
+            <option value="800">800</option>
+          </select>
+        </label>
+        <label class="toggle-label">
+          <input id="graphValidatedOnly" type="checkbox" />
+          <span>Validated only</span>
+        </label>
+        <p class="muted tiny">
+          When on, shows nodes/edges with <code>validationStatus</code>
+          <code>validated</code> or <code>approved</code>.
+        </p>
+        <div class="row">
+          <button type="button" id="graphApply">Apply</button>
+          <button type="button" id="graphReset" class="secondary">Reset</button>
+        </div>
+        <p id="graphStatus" class="muted">Load the graph to begin.</p>
+        <h3>Matching nodes</h3>
+        <div id="graphNodeList" class="node-list graph-node-list" role="listbox"></div>
+      </aside>
+
+      <section class="card graph-canvas-card">
+        <div class="decomp-header">
+          <h2>Graph</h2>
+          <p id="graphMeta" class="muted"></p>
+        </div>
+        <div class="row graph-toolbar">
+          <button type="button" id="zoomOut" class="secondary" aria-label="Zoom out">−</button>
+          <button type="button" id="zoomIn" class="secondary" aria-label="Zoom in">+</button>
+          <button type="button" id="zoomFit" class="secondary">Fit</button>
+          <button type="button" id="zoomReset" class="secondary">Reset view</button>
+        </div>
+        <p class="legend muted">
+          Drag background to pan · + / − to zoom (node size stays steady so zoom-in spreads overlaps) ·
+          click a node to select · click again / empty canvas / outside to clear ·
+          right-click for actions · double-click to edit.
+        </p>
+        <div id="graphCanvas" class="graph-canvas" aria-label="Graph visualization"></div>
+        <div id="graphSelection" class="graph-selection muted">No node selected.</div>
+      </section>
+    </main>
+
+    <div id="ctxMenu" class="ctx-menu" hidden role="menu"></div>
+
+    <script src="/graph.js" type="module"></script>
+  </body>
+</html>

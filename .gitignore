@@ -1,0 +1,7 @@
+.env
+data/
+export/.venv/
+export/out/
+export/__pycache__/
+*.pyc
+wrapper/node_modules/

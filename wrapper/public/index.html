@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ME decomp — Decisive Neo4j POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Mission engineering graph lab</h1>
+        <p class="muted">
+          Wrapper UI separate from CFTv3.
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link active" href="/">KOP decomp</a>
+        <a class="site-nav-link" href="/graph.html">Graph</a>
+        <a class="site-nav-link" href="/manage.html">Manage</a>
+        <a class="site-nav-link" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card wide">
+        <h2>Load decomposition</h2>
+        <p class="muted">
+          Start from a KOP for the full tree, or a KTP / functional capability to zoom into a smaller slice.
+        </p>
+        <div class="row">
+          <label>
+            Root type
+            <select id="rootKind">
+              <option value="KOP" selected>KOP</option>
+              <option value="KTP">KTP</option>
+              <option value="FC">Functional capability</option>
+            </select>
+          </label>
+          <label class="grow">
+            Select
+            <select id="rootSelect">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+          <label class="grow">
+            Or id
+            <input id="rootId" type="text" placeholder="KOP-07, KTP-07.3, T-07.3.1-01…" />
+          </label>
+          <button type="button" id="loadBtn">Load decomp</button>
+        </div>
+        <div class="row focus-row" id="focusRow" hidden>
+          <label class="grow">
+            Focus subtree
+            <select id="focusSelect">
+              <option value="">Full loaded tree</option>
+            </select>
+          </label>
+          <button type="button" id="focusClear" class="secondary">Clear focus</button>
+        </div>
+        <p id="status" class="muted"></p>
+        <div id="kopChecklist" class="kop-checklist" hidden></div>
+      </section>
+
+      <section class="card wide">
+        <div class="decomp-header">
+          <h2>Decomposition</h2>
+          <div class="view-tabs" role="tablist" aria-label="Decomp view">
+            <button type="button" class="view-tab active" data-view="tree" role="tab" aria-selected="true">Tree</button>
+            <button type="button" class="view-tab" data-view="table" role="tab" aria-selected="false">Table</button>
+          </div>
+        </div>
+        <div id="decomp" class="decomp">
+          <p class="muted">Load a KOP, KTP, or FC to see the ME hierarchy as a tree or table.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

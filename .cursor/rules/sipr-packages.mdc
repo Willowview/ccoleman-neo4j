@@ -1,0 +1,17 @@
+---
+description: Keep SIPR-PACKAGES.md in sync when deps or images change
+globs: wrapper/package.json,wrapper/package-lock.json,docker-compose.yml,SIPR-PACKAGES.md
+alwaysApply: false
+---
+
+# SIPR package inventory
+
+When you add, remove, or upgrade **npm dependencies** or **Docker images** in this lab:
+
+1. Update [`SIPR-PACKAGES.md`](SIPR-PACKAGES.md) in the **same** change set.
+2. Sync locked versions from `wrapper/package-lock.json`.
+3. For each new package/image, add a short **Needed for** explanation (what role it plays in the POC).
+4. If something is removed, delete its row and bump **Last verified**.
+5. Keep the “Explicitly out of scope” section honest if the stack grows (e.g. Express added).
+
+Do not invent packages. Prefer the lockfile and compose file as truth.

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KOP authoring wizard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>KOP authoring wizard</h1>
+        <p class="muted">
+          Step through ME levels 1–7 (TurboTax-style).
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="/">KOP decomp</a>
+        <a class="site-nav-link" href="/graph.html">Graph</a>
+        <a class="site-nav-link" href="/manage.html">Manage</a>
+        <a class="site-nav-link" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="wizard-wrap">
+      <ol class="wizard-steps" id="stepList" aria-label="Wizard steps"></ol>
+
+      <section class="card">
+        <h2 id="stepTitle">Step</h2>
+        <p id="stepHelp" class="muted"></p>
+        <div id="stepBody" class="form"></div>
+        <p id="stepMsg" class="muted"></p>
+        <div class="row wizard-actions">
+          <button type="button" id="backBtn" class="secondary">Back</button>
+          <button type="button" id="skipBtn" class="secondary">Skip</button>
+          <button type="button" id="addBtn">Save &amp; add another</button>
+          <button type="button" id="nextBtn">Save &amp; next</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Session so far</h2>
+        <pre id="sessionOut" class="out">No nodes created yet.</pre>
+        <p class="muted" id="doneLinks" hidden>
+          <a id="viewDecomp" href="/">View decomp for this KOP</a>
+        </p>
+      </section>
+    </main>
+
+    <script src="/wizard.js" type="module"></script>
+  </body>
+</html>

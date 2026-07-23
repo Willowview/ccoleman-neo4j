@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Validation — Decisive Neo4j POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Mission engineering graph lab</h1>
+        <p class="muted">ME completeness checklist, orphans, and validation status.</p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="/">KOP decomp</a>
+        <a class="site-nav-link" href="/graph.html">Graph</a>
+        <a class="site-nav-link" href="/manage.html">Manage</a>
+        <a class="site-nav-link active" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card wide">
+        <h2>Missing-level checklist</h2>
+        <p class="muted">Which of ME levels 1–7 are present for a KOP (linked via expected relationships).</p>
+        <div class="row">
+          <label>
+            KOP
+            <select id="checkKopSelect">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+          <label class="grow">
+            Or id
+            <input id="checkKopId" type="text" placeholder="KOP-07" />
+          </label>
+          <button type="button" id="checkBtn">Run checklist</button>
+        </div>
+        <p id="checkStatus" class="muted"></p>
+        <div id="checklistOut"></div>
+      </section>
+
+      <section class="card">
+        <h2>Orphan report</h2>
+        <p class="muted">
+          Nodes with no ME hierarchy edges
+          (<code>DECOMPOSES_TO</code>, <code>HAS_APPROACH</code>, <code>NEXT</code>,
+          <code>SATISFIED_BY</code>, <code>PERFORMED_BY</code>, <code>MEASURES</code>, …
+        </p>
+        <button type="button" id="orphanBtn">Find orphans</button>
+        <p id="orphanStatus" class="muted"></p>
+        <div id="orphanList" class="node-list manage-node-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>Validation status</h2>
+        <p class="muted">Filter by status, then approve (or set) in bulk.</p>
+        <div class="row">
+          <label>
+            Status
+            <select id="valStatus">
+              <option value="pending" selected>pending</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+              <option value="draft">draft</option>
+            </select>
+          </label>
+          <label>
+            Scope
+            <select id="valScope">
+              <option value="both" selected>nodes + relationships</option>
+              <option value="nodes">nodes only</option>
+              <option value="relationships">relationships only</option>
+            </select>
+          </label>
+          <button type="button" id="valLoadBtn">Load</button>
+        </div>
+        <p id="valStatusMsg" class="muted"></p>
+        <div id="valLists" class="val-lists"></div>
+        <div class="row" style="margin-top: 0.75rem">
+          <label>
+            Set to
+            <select id="valToStatus">
+              <option value="approved" selected>approved</option>
+              <option value="pending">pending</option>
+              <option value="rejected">rejected</option>
+              <option value="draft">draft</option>
+            </select>
+          </label>
+          <button type="button" id="valSelectedBtn" class="secondary">Update selected</button>
+          <button type="button" id="valAllBtn">Update all matching filter</button>
+        </div>
+        <pre id="valOut" class="out"></pre>
+      </section>
+    </main>
+
+    <script src="/validation.js" type="module"></script>
+  </body>
+</html>

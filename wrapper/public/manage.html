@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage — Decisive Neo4j POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-brand">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Mission engineering graph lab</h1>
+        <p class="muted">
+          Create, edit, and delete nodes.
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="/">KOP decomp</a>
+        <a class="site-nav-link" href="/graph.html">Graph</a>
+        <a class="site-nav-link active" href="/manage.html">Manage</a>
+        <a class="site-nav-link" href="/validation.html">Validation</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Create node</h2>
+        <p class="muted">Pick one ME ontology (1–7). Neo4j label and meLevel are set from that choice.</p>
+        <form id="createForm" class="form">
+          <label>
+            ME ontology
+            <select id="ontology" name="ontology">
+              <option value="1">1 — KOP (Objective)</option>
+              <option value="2" selected>2 — KTP (Objective)</option>
+              <option value="3">3 — Mission thread / approach (FunctionalCapability)</option>
+              <option value="4">4 — Sequenced FC / task (FunctionalCapability)</option>
+              <option value="5">5 — Capability solution</option>
+              <option value="6">6 — Actor</option>
+              <option value="7">7 — Measure</option>
+              <option value="project">Project</option>
+              <option value="artifact">Artifact</option>
+            </select>
+          </label>
+          <label>
+            Name
+            <input name="name" required placeholder="Display name" />
+          </label>
+          <label>
+            Id (optional)
+            <input name="id" placeholder="auto if blank" />
+          </label>
+          <label id="missionThreadRow" hidden>
+            Mission thread (level 3)
+            <input name="missionThread" id="missionThread" placeholder="e.g. MT 1.A" />
+          </label>
+          <label id="sequenceRow" hidden>
+            Sequence (level 4)
+            <input name="sequence" id="sequence" type="number" placeholder="e.g. 1" />
+          </label>
+          <label id="phaseRow" hidden>
+            Phase (level 4)
+            <input name="phase" id="phase" placeholder="e.g. detect" />
+          </label>
+          <label>
+            Link from id
+            <input name="fromId" id="fromId" placeholder="e.g. parent node id" />
+          </label>
+          <label>
+            Relationship
+            <input name="relationship" id="relationship" value="DECOMPOSES_TO" />
+          </label>
+          <input type="hidden" name="linkDirection" id="linkDirection" value="out" />
+          <input type="hidden" name="meLevel" id="meLevel" value="KTP" />
+          <div class="row">
+            <button type="submit">Create</button>
+            <a class="button-link secondary" href="/wizard.html">KOP authoring wizard</a>
+          </div>
+        </form>
+        <pre id="createOut" class="out"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Edit or delete</h2>
+        <p class="muted">Search, then open the full editor (properties, relationships, relink, delete).</p>
+        <label>
+          Search nodes
+          <input id="manageSearch" type="search" placeholder="Id or name…" autocomplete="off" />
+        </label>
+        <div id="manageNodeList" class="node-list manage-node-list" role="listbox"></div>
+        <p id="manageStatus" class="muted"></p>
+        <div class="row">
+          <button type="button" id="openEditBtn" class="secondary" disabled>Open editor</button>
+          <button type="button" id="quickDeleteBtn" class="danger" disabled>Quick delete…</button>
+        </div>
+        <pre id="manageOut" class="out"></pre>
+      </section>
+    </main>
+
+    <script src="/manage.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+# Neo4j (existing) + minimal Node wrapper POC (SIPR package research).
+# Wrapper npm deps: neo4j-driver only.
+# Do not set NEO4J_PASSWORD as a container env on neo4j — Neo4j treats NEO4J_* as config.
+
+services:
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: neo4j-decisive-dev
+    ports:
+      - "7475:7474" # Browser UI (7474 used by rag-system-neo4j)
+      - "7688:7687" # Bolt
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-decisive-dev-password}
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u ${NEO4J_USER:-neo4j} -p '${NEO4J_PASSWORD:-decisive-dev-password}' 'RETURN 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
+  wrapper:
+    image: node:22-alpine
+    container_name: neo4j-decisive-wrapper
+    working_dir: /app
+    volumes:
+      - ./wrapper:/app
+    command: sh -c "npm install && node src/index.js"
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: "3002"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-decisive-dev-password}
+    depends_on:
+      neo4j:
+        condition: service_healthy

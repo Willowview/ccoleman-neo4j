@@ -1,0 +1,21 @@
+# Throwaway Postgres for loading schema/seed and running the exporter.
+# Does not replace the Neo4j service in the parent docker-compose.yml.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cftv3-export-pg
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: cftv3
+      POSTGRES_USER: cftv3
+      POSTGRES_PASSWORD: cftv3
+    volumes:
+      - ./schema/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./schema/02_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cftv3 -d cftv3"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
