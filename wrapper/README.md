@@ -27,7 +27,7 @@ HTTP and static files use Node built-ins (no Express / GraphQL / NVL).
 
 ```bash
 cd neo4j-decisive-lab
-cp -n .env.example .env
+# create .env if needed (gitignored) — see docker-compose defaults / index.js for keys
 docker compose up -d
 ```
 

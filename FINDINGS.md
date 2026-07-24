@@ -98,7 +98,7 @@ Full living inventory with refresh instructions: **[`SIPR-PACKAGES.md`](./SIPR-P
 
 ```bash
 cd neo4j-decisive-lab
-cp -n .env.example .env   # if present
+# optional: create a local .env (gitignored) with NEO4J_* / LAB_* credentials
 docker compose up -d
 ```
 
