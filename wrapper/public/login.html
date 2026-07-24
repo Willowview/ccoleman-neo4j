@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login — Decisive Neo4j POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-shell">
+      <section class="card login-card">
+        <p class="site-eyebrow">Decisive Neo4j POC</p>
+        <h1>Sign in</h1>
+        <p class="muted">Lab access only — not production SIPR auth.</p>
+        <form id="loginForm" class="login-form">
+          <label>
+            Username
+            <input
+              id="username"
+              name="username"
+              type="text"
+              autocomplete="username"
+              required
+              autofocus
+            />
+          </label>
+          <label>
+            Password
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <button type="submit">Sign in</button>
+          <p id="loginError" class="login-error" hidden></p>
+        </form>
+      </section>
+    </main>
+    <script type="module">
+      const form = document.getElementById("loginForm");
+      const errEl = document.getElementById("loginError");
+
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        errEl.hidden = true;
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        try {
+          const res = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || "Login failed");
+          window.location.href = "/";
+        } catch (err) {
+          errEl.textContent = err.message || "Login failed";
+          errEl.hidden = false;
+        }
+      });
+    </script>
+  </body>
+</html>

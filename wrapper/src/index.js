@@ -6,6 +6,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import neo4j from "neo4j-driver";
 
@@ -16,6 +17,14 @@ const PORT = Number(process.env.PORT || 3002);
 const URI = process.env.NEO4J_URI || "bolt://localhost:7688";
 const USER = process.env.NEO4J_USER || "neo4j";
 const PASSWORD = process.env.NEO4J_PASSWORD || "decisive-dev-password";
+
+/** Lab UI login (POC only — not SIPR-grade auth). */
+const LAB_USER = process.env.LAB_USER || "Admin";
+const LAB_PASSWORD = process.env.LAB_PASSWORD || "AdminPass123";
+const SESSION_COOKIE = "decisive_session";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12h
+/** @type {Map<string, { user: string, expires: number }>} */
+const sessions = new Map();
 
 const ALLOWED_LABELS = [
   "Objective",
@@ -80,6 +89,98 @@ function json(res, status, body) {
     "Access-Control-Allow-Origin": "*",
   });
   res.end(payload);
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (k) out[k] = decodeURIComponent(v);
+  }
+  return out;
+}
+
+function setSessionCookie(res, token) {
+  const maxAge = Math.floor(SESSION_TTL_MS / 1000);
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+  );
+}
+
+function createSession(username) {
+  const token = crypto.randomBytes(24).toString("hex");
+  sessions.set(token, {
+    user: username,
+    expires: Date.now() + SESSION_TTL_MS,
+  });
+  return token;
+}
+
+function destroySession(token) {
+  if (token) sessions.delete(token);
+}
+
+function getSession(req) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (!token) return null;
+  const sess = sessions.get(token);
+  if (!sess) return null;
+  if (sess.expires < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+  return { token, ...sess };
+}
+
+function safeEqual(a, b) {
+  const aa = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (aa.length !== bb.length) return false;
+  return crypto.timingSafeEqual(aa, bb);
+}
+
+function wantsHtml(req, pathname) {
+  if (pathname === "/" || pathname.endsWith(".html")) return true;
+  const accept = String(req.headers.accept || "");
+  return accept.includes("text/html");
+}
+
+function isPublicPath(pathname) {
+  return (
+    pathname === "/login.html" ||
+    pathname === "/login" ||
+    pathname === "/logout" ||
+    pathname === "/health" ||
+    pathname === "/styles.css"
+  );
+}
+
+function requireAuth(req, res, pathname) {
+  if (isPublicPath(pathname)) return true;
+  const sess = getSession(req);
+  if (sess) return true;
+  if (wantsHtml(req, pathname)) {
+    res.writeHead(302, { Location: "/login.html" });
+    res.end();
+    return false;
+  }
+  json(res, 401, {
+    error: "unauthorized",
+    message: "Login required. POST /login with { username, password }.",
+  });
+  return false;
 }
 
 function readBody(req) {
@@ -1702,8 +1803,55 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
   try {
+    if (req.method === "GET" && url.pathname === "/login") {
+      res.writeHead(302, { Location: "/login.html" });
+      res.end();
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/login") {
+      const body = await readBody(req);
+      const username = String(body.username || "").trim();
+      const password = String(body.password || "");
+      if (
+        safeEqual(username, LAB_USER) &&
+        safeEqual(password, LAB_PASSWORD)
+      ) {
+        const token = createSession(username);
+        setSessionCookie(res, token);
+        json(res, 200, { ok: true, user: username });
+        return;
+      }
+      json(res, 401, {
+        error: "unauthorized",
+        message: "Invalid username or password",
+      });
+      return;
+    }
+    if (
+      (req.method === "GET" || req.method === "POST") &&
+      url.pathname === "/logout"
+    ) {
+      const sess = getSession(req);
+      if (sess) destroySession(sess.token);
+      clearSessionCookie(res);
+      if (req.method === "GET" || wantsHtml(req, url.pathname)) {
+        res.writeHead(302, { Location: "/login.html" });
+        res.end();
+        return;
+      }
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    if (!requireAuth(req, res, url.pathname)) return;
+
     if (req.method === "GET" && url.pathname === "/health") {
       json(res, 200, await health());
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/auth/me") {
+      const sess = getSession(req);
+      json(res, 200, { user: sess?.user || null });
       return;
     }
     if (req.method === "POST" && url.pathname === "/seed") {
@@ -1856,6 +2004,10 @@ const server = http.createServer(async (req, res) => {
     json(res, 404, {
       error: "not_found",
       routes: [
+        "GET /login.html",
+        "POST /login",
+        "GET|POST /logout",
+        "GET /auth/me",
         "GET /",
         "GET /health",
         "GET /kops",
