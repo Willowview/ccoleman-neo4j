@@ -116,6 +116,8 @@ function nodeLevelHint(labels, props) {
     if (me === "vignette" || me === "MT") return 3;
     return 2;
   }
+  // Fallback only — prefer refineFcLevelHintsFromEdges when edges are known.
+  // Seed data often stamps missionThread on every task; wizard only on the head.
   if (labels.includes("FunctionalCapability")) {
     return props?.missionThread != null ? 3 : 4;
   }
@@ -125,6 +127,40 @@ function nodeLevelHint(labels, props) {
   if (labels.includes("Project")) return 5;
   if (labels.includes("Artifact")) return 5;
   return 0;
+}
+
+/**
+ * ME levels 3 vs 4 from relationships (same label: FunctionalCapability):
+ *   3 = approach / MT head  ← KTP -[:HAS_APPROACH]-> fc
+ *   4 = sequenced task      ← ()-[:NEXT]-> fc
+ * Mutates nodes in place; safe to call after edges are collected.
+ */
+function refineFcLevelHintsFromEdges(nodes, edges) {
+  const hasApproachIn = new Set();
+  const hasNextIn = new Set();
+  for (const e of edges || []) {
+    if (e.relationship === "HAS_APPROACH" && e.target) hasApproachIn.add(e.target);
+    if (e.relationship === "NEXT" && e.target) hasNextIn.add(e.target);
+  }
+  for (const n of nodes || []) {
+    if (!(n.labels || []).includes("FunctionalCapability")) continue;
+    if (hasNextIn.has(n.id)) {
+      n.levelHint = 4;
+    } else if (hasApproachIn.has(n.id)) {
+      n.levelHint = 3;
+    }
+    // else keep serializeNode fallback (missionThread / default)
+  }
+}
+
+function groupNodesByLevel(nodes) {
+  const byLevel = {};
+  for (const n of nodes) {
+    const key = String(n.levelHint || 0);
+    if (!byLevel[key]) byLevel[key] = [];
+    byLevel[key].push(n);
+  }
+  return byLevel;
 }
 
 function serializeNode(node) {
@@ -261,16 +297,12 @@ function packDecompResult(rootId, rootKind, rootSerialized, pathRecords) {
     nodeMap.set(rootSerialized.id, rootSerialized);
   }
 
-  const nodes = [...nodeMap.values()].sort(
+  const edges = [...edgeMap.values()];
+  const nodes = [...nodeMap.values()];
+  refineFcLevelHintsFromEdges(nodes, edges);
+  nodes.sort(
     (a, b) => a.levelHint - b.levelHint || String(a.id).localeCompare(String(b.id)),
   );
-  const edges = [...edgeMap.values()];
-  const byLevel = {};
-  for (const n of nodes) {
-    const key = String(n.levelHint || 0);
-    if (!byLevel[key]) byLevel[key] = [];
-    byLevel[key].push(n);
-  }
 
   const root =
     nodes.find((n) => n.id === rootId) || rootSerialized || null;
@@ -283,7 +315,7 @@ function packDecompResult(rootId, rootKind, rootSerialized, pathRecords) {
     kop: rootKind === "KOP" ? root : nodes.find((n) => n.meLevel === "KOP") || null,
     nodes,
     edges,
-    byLevel,
+    byLevel: groupNodesByLevel(nodes),
     pathCount: pathRecords.length,
   };
 }
@@ -1223,6 +1255,8 @@ async function graphSnapshot({
         validationStatus: r.get("validationStatus") ?? null,
       }));
     }
+
+    refineFcLevelHintsFromEdges(nodes, edges);
 
     const labelResult = await s.run(`
       MATCH (n)
