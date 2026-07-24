@@ -427,9 +427,19 @@ async function deleteNode(nodeId) {
   }
 }
 
-function zoomBy(factor) {
-  const cx = W / 2;
-  const cy = H / 2;
+function zoomBy(factor, clientX, clientY) {
+  let cx = W / 2;
+  let cy = H / 2;
+  if (clientX != null && clientY != null) {
+    const svg = canvasEl.querySelector("svg");
+    if (svg) {
+      const rect = svg.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        cx = ((clientX - rect.left) / rect.width) * W;
+        cy = ((clientY - rect.top) / rect.height) * H;
+      }
+    }
+  }
   const worldX = (cx - view.x) / view.k;
   const worldY = (cy - view.y) / view.k;
   view.k = Math.min(4, Math.max(0.25, view.k * factor));
@@ -527,11 +537,19 @@ window.addEventListener("pointermove", onPointerMove);
 window.addEventListener("pointerup", onPointerUp);
 canvasEl.addEventListener("contextmenu", onContextMenu);
 canvasEl.addEventListener("dblclick", onDblClick);
-// Block wheel zoom — use + / − buttons only
+// Ctrl/⌘ + scroll to zoom (trackpad-friendly; a bit snappier than decomp)
 canvasEl.addEventListener(
   "wheel",
   (ev) => {
-    if (canvasEl.contains(ev.target)) ev.preventDefault();
+    if (!(ev.ctrlKey || ev.metaKey)) {
+      // Keep page from scrolling while pointer is over the graph
+      if (canvasEl.contains(ev.target)) ev.preventDefault();
+      return;
+    }
+    ev.preventDefault();
+    let factor = Math.exp(-ev.deltaY * 0.0022);
+    factor = Math.min(1.12, Math.max(1 / 1.12, factor));
+    zoomBy(factor, ev.clientX, ev.clientY);
   },
   { passive: false },
 );

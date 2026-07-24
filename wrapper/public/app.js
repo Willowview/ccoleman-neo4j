@@ -17,6 +17,14 @@ let lastRootId = null;
 let focusId = null;
 let tableLoading = false;
 
+/** Decomp tree pan/zoom (SVG viewBox size stays fixed; display size scales). */
+let treeZoom = 1;
+const TREE_ZOOM_STEP = 1.2;
+const TREE_ZOOM_MIN = 0.15;
+const TREE_ZOOM_MAX = 2.5;
+/** @type {{ w: number, h: number }} */
+let lastTreeSize = { w: 0, h: 0 };
+
 const LEVEL_TITLES = {
   1: "1 — KOP",
   2: "2 — KTP",
@@ -28,17 +36,28 @@ const LEVEL_TITLES = {
   0: "Other",
 };
 
-/** Parent → child hierarchy edges drawn as tree elbows. */
-const HIERARCHY_RELS = new Set([
+/** Spine of the ME tree — drawn solid. */
+const TREE_SPINE_RELS = new Set([
   "DECOMPOSES_TO",
   "HAS_APPROACH",
   "NEXT",
+]);
+
+/** Cross-links to solutions / actors / measures — drawn dashed. */
+const TREE_ASSOC_RELS = new Set([
   "SATISFIED_BY",
   "PERFORMED_BY",
-  "REQUIRES",
-  "PERFORMS",
+  "MEASURES",
   "HAS_MEASURE",
   "EVALUATED_BY",
+]);
+
+/** All edges used for parent/child navigation (focus, clustering). */
+const HIERARCHY_RELS = new Set([
+  ...TREE_SPINE_RELS,
+  ...TREE_ASSOC_RELS,
+  "REQUIRES",
+  "PERFORMS",
   "SELECTS_MVC",
   "SUPPORTS",
   "DESCRIBES",
@@ -46,13 +65,7 @@ const HIERARCHY_RELS = new Set([
   "MEMBER_OF",
 ]);
 
-const DASHED_RELS = new Set([
-  "SATISFIED_BY",
-  "PERFORMED_BY",
-  "MEASURES",
-  "HAS_MEASURE",
-  "EVALUATED_BY",
-]);
+const DASHED_RELS = TREE_ASSOC_RELS;
 
 function setStatus(msg) {
   statusEl.textContent = msg || "";
@@ -190,6 +203,101 @@ function displayedTreeData() {
   return filterSubtree(lastTreeData, focusId);
 }
 
+function clampTreeZoom(z) {
+  return Math.min(TREE_ZOOM_MAX, Math.max(TREE_ZOOM_MIN, z));
+}
+
+function applyTreeZoom() {
+  const svg = document.querySelector("#decompTreePanel .decomp-svg");
+  const label = document.getElementById("treeZoomLabel");
+  if (!svg || !lastTreeSize.w) return;
+  svg.setAttribute("width", String(Math.round(lastTreeSize.w * treeZoom)));
+  svg.setAttribute("height", String(Math.round(lastTreeSize.h * treeZoom)));
+  if (label) label.textContent = `${Math.round(treeZoom * 100)}%`;
+}
+
+function setTreeZoom(z) {
+  treeZoom = clampTreeZoom(z);
+  applyTreeZoom();
+}
+
+function fitTreeZoom() {
+  const scroll = document.getElementById("treeScroll");
+  if (!scroll || !lastTreeSize.w) return;
+  const pad = 24;
+  const kx = (scroll.clientWidth - pad) / lastTreeSize.w;
+  const ky = (scroll.clientHeight - pad) / lastTreeSize.h;
+  setTreeZoom(Math.min(kx, ky));
+  scroll.scrollLeft = 0;
+  scroll.scrollTop = 0;
+}
+
+function wireTreeViewport() {
+  const scroll = document.getElementById("treeScroll");
+  if (!scroll) return;
+
+  document.getElementById("treeZoomIn")?.addEventListener("click", () => {
+    setTreeZoom(treeZoom * TREE_ZOOM_STEP);
+  });
+  document.getElementById("treeZoomOut")?.addEventListener("click", () => {
+    setTreeZoom(treeZoom / TREE_ZOOM_STEP);
+  });
+  document.getElementById("treeZoomFit")?.addEventListener("click", fitTreeZoom);
+  document.getElementById("treeZoomReset")?.addEventListener("click", () => {
+    setTreeZoom(1);
+    scroll.scrollLeft = 0;
+    scroll.scrollTop = 0;
+  });
+
+  scroll.addEventListener(
+    "wheel",
+    (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      ev.preventDefault();
+      // Trackpads fire many small wheel events — use gentle exponential zoom,
+      // clamped per tick so Mac pinch/scroll doesn't leap 20–50% at once.
+      let factor = Math.exp(-ev.deltaY * 0.001);
+      factor = Math.min(1.06, Math.max(1 / 1.06, factor));
+      setTreeZoom(treeZoom * factor);
+    },
+    { passive: false },
+  );
+
+  let panning = false;
+  let panX = 0;
+  let panY = 0;
+  scroll.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    if (ev.target.closest?.(".tree-node")) return;
+    panning = true;
+    panX = ev.clientX;
+    panY = ev.clientY;
+    scroll.classList.add("panning");
+    scroll.setPointerCapture?.(ev.pointerId);
+  });
+  scroll.addEventListener("pointermove", (ev) => {
+    if (!panning) return;
+    scroll.scrollLeft -= ev.clientX - panX;
+    scroll.scrollTop -= ev.clientY - panY;
+    panX = ev.clientX;
+    panY = ev.clientY;
+  });
+  const endPan = (ev) => {
+    if (!panning) return;
+    panning = false;
+    scroll.classList.remove("panning");
+    try {
+      scroll.releasePointerCapture?.(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+  scroll.addEventListener("pointerup", endPan);
+  scroll.addEventListener("pointercancel", endPan);
+
+  applyTreeZoom();
+}
+
 /** Split text into wrapped lines that fit the node box. */
 function wrapLines(text, maxChars, maxLines) {
   const raw = String(text || "").trim() || "?";
@@ -285,7 +393,7 @@ function primaryParentId(nodeId, edges) {
 }
 
 /**
- * Visual ME tree: leveled rows + SVG elbows from parent → child (like the board photo).
+ * Visual ME tree: leveled rows + straight diagonal links (reference ME board style).
  */
 function renderDecomp(rawData) {
   const data = rawData?.focused ? rawData : filterSubtree(rawData, focusId);
@@ -296,7 +404,6 @@ function renderDecomp(rawData) {
 
   fillFocusSelect(lastTreeData);
 
-  const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const edges = data.edges || [];
 
   const levels = [1, 2, 3, 4, 5, 6, 7]
@@ -315,19 +422,20 @@ function renderDecomp(rawData) {
     });
   }
 
-  const boxW = 148;
-  const boxH = 72;
-  const rowGap = 86;
-  const maxNameChars = 16;
-  const maxSubChars = 18;
-  const labelH = 24;
-  const padX = 28;
-  const padTop = 10;
-  const gapX = 18;
+  const boxW = 108;
+  const boxH = 64;
+  const rowGap = 72;
+  const maxNameChars = 12;
+  const maxSubChars = 13;
+  const labelH = 22;
+  const padX = 16;
+  const padTop = 8;
+  const gapX = 8;
   const maxPerRow = Math.max(...levels.map((r) => r.nodes.length), 1);
-  const width = Math.max(780, padX * 2 + maxPerRow * (boxW + gapX));
+  // Pack to content width (skinnier boxes) so wide decomps scroll less
+  const width = Math.max(520, padX * 2 + maxPerRow * (boxW + gapX));
   const height =
-    padTop + levels.length * (labelH + boxH + rowGap) - rowGap + 36;
+    padTop + levels.length * (labelH + boxH + rowGap) - rowGap + 28;
 
   /** @type {Map<string, { x: number, y: number, cx: number, cyTop: number, cyBot: number, lvl: number }>} */
   const pos = new Map();
@@ -352,26 +460,129 @@ function renderDecomp(rawData) {
     });
   });
 
-  const lines = [];
-  for (const e of edges) {
-    let parentId = e.source;
-    let childId = e.target;
-    // MEASURES: Measure → thing; visually parent = measured thing, child = measure
-    if (e.relationship === "MEASURES") {
-      parentId = e.target;
-      childId = e.source;
+  const levelById = new Map(
+    (data.nodes || []).map((n) => [n.id, n.levelHint || 0]),
+  );
+
+  /**
+   * Reference board: each level only links to the next (1→2→…→7).
+   * Seed data often has FC→Actor and Measure→CS instead of CS→Actor→Measure;
+   * synthesize those adjacent display edges so 5→6→7 still appear.
+   */
+  function buildTreeDrawEdges(rawEdges) {
+    const draw = [];
+    const csByFc = new Map();
+    const actorsByFc = new Map();
+    const measuresByCs = new Map();
+
+    for (const e of rawEdges || []) {
+      if (e.relationship === "SATISFIED_BY") {
+        if (!csByFc.has(e.source)) csByFc.set(e.source, []);
+        csByFc.get(e.source).push(e.target);
+      } else if (e.relationship === "PERFORMED_BY") {
+        if (!actorsByFc.has(e.source)) actorsByFc.set(e.source, []);
+        actorsByFc.get(e.source).push(e.target);
+      } else if (e.relationship === "MEASURES" && levelById.get(e.target) === 5) {
+        if (!measuresByCs.has(e.target)) measuresByCs.set(e.target, []);
+        measuresByCs.get(e.target).push(e.source);
+      }
     }
+
+    for (const e of rawEdges || []) {
+      const isSpine = TREE_SPINE_RELS.has(e.relationship);
+      // Real SATISFIED_BY drawn as FC → solution (levels 3/4 → 5)
+      if (e.relationship === "SATISFIED_BY") {
+        draw.push({
+          source: e.source,
+          target: e.target,
+          relationship: e.relationship,
+          dashed: true,
+        });
+        continue;
+      }
+      if (isSpine) {
+        draw.push({
+          source: e.source,
+          target: e.target,
+          relationship: e.relationship,
+          dashed: false,
+        });
+      }
+    }
+
+    const seen56 = new Set();
+    const seen67 = new Set();
+    for (const [fc, css] of csByFc) {
+      const actors = actorsByFc.get(fc) || [];
+      for (const cs of css) {
+        for (const actor of actors) {
+          const k56 = `${cs}>${actor}`;
+          if (!seen56.has(k56) && levelById.get(cs) === 5 && levelById.get(actor) === 6) {
+            seen56.add(k56);
+            draw.push({
+              source: cs,
+              target: actor,
+              relationship: "PERFORMED_BY",
+              dashed: true,
+              synthetic: true,
+            });
+          }
+          for (const measure of measuresByCs.get(cs) || []) {
+            const k67 = `${actor}>${measure}`;
+            if (
+              !seen67.has(k67) &&
+              levelById.get(actor) === 6 &&
+              levelById.get(measure) === 7
+            ) {
+              seen67.add(k67);
+              draw.push({
+                source: actor,
+                target: measure,
+                relationship: "MEASURES",
+                dashed: true,
+                synthetic: true,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // CS with measures but no co-FC actor: still show 5→7? No — board is actors→measures only.
+    // Actors with no CS on same FC: no 5→6 from that path.
+    return draw;
+  }
+
+  function shouldDrawTreeEdge(rel, parentId, childId, dashed) {
+    const pLvl = levelById.get(parentId);
+    const cLvl = levelById.get(childId);
+    if (pLvl == null || cLvl == null) return false;
+    if (rel === "NEXT" && pLvl === cLvl) return true;
+    // FC (approach head L3 or sequenced L4) → solution L5
+    if (rel === "SATISFIED_BY" && cLvl === 5 && (pLvl === 3 || pLvl === 4)) {
+      return true;
+    }
+    return cLvl === pLvl + 1;
+  }
+
+  function assocBandClass(parentLvl, childLvl) {
+    if (parentLvl === 4 || (parentLvl === 3 && childLvl === 5)) return "band-45";
+    if (parentLvl === 5) return "band-56";
+    if (parentLvl === 6) return "band-67";
+    return "";
+  }
+
+  const lines = [];
+  for (const e of buildTreeDrawEdges(edges)) {
+    const parentId = e.source;
+    const childId = e.target;
+    if (!shouldDrawTreeEdge(e.relationship, parentId, childId, e.dashed)) continue;
+
     const a = pos.get(parentId);
     const b = pos.get(childId);
     if (!a || !b) continue;
-    if (
-      !HIERARCHY_RELS.has(e.relationship) &&
-      e.relationship !== "MEASURES"
-    ) {
-      continue;
-    }
 
-    const dashed = DASHED_RELS.has(e.relationship);
+    const dashed = Boolean(e.dashed);
     let d;
     if (e.relationship === "NEXT" && a.lvl === b.lvl) {
       const yMid = a.y + boxH / 2;
@@ -380,41 +591,26 @@ function renderDecomp(rawData) {
       const x2 = leftToRight ? b.x : b.x + boxW;
       d = `M ${x1} ${yMid} L ${x2} ${yMid}`;
     } else {
-      const x1 = a.cx;
-      const y1 = a.cyBot;
-      const x2 = b.cx;
-      const y2 = b.cyTop;
-      const midY = y1 + (y2 - y1) * 0.5;
-      // Orthogonal elbow: down → across → down (points clearly at parent)
-      d = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+      d = `M ${a.cx} ${a.cyBot} L ${b.cx} ${b.cyTop}`;
     }
+    const band = dashed ? assocBandClass(a.lvl, b.lvl) : "";
     lines.push({
       d,
       dashed,
+      band,
       rel: e.relationship,
-      title: `${parentId} -[${e.relationship}]-> ${childId}`,
+      title: `${parentId} -[${e.relationship}${e.synthetic ? ", via FC" : ""}]-> ${childId}`,
+      z: dashed ? 0 : 1,
     });
   }
-
-  function parentLabels(nodeId) {
-    const names = [];
-    for (const e of edges) {
-      if (e.relationship === "MEASURES" && e.source === nodeId) {
-        const t = byId.get(e.target);
-        if (t) names.push(shortLabel(t));
-      } else if (e.target === nodeId && e.relationship !== "MEASURES") {
-        const s = byId.get(e.source);
-        if (s) names.push(shortLabel(s));
-      }
-    }
-    return [...new Set(names)].slice(0, 2);
-  }
+  lines.sort((a, b) => a.z - b.z);
 
   const svgLines = lines
-    .map(
-      (ln) =>
-        `<path class="tree-edge${ln.dashed ? " dashed" : ""}" d="${ln.d}" marker-end="url(#arrow)"><title>${escapeHtml(ln.title)}</title></path>`,
-    )
+    .map((ln) => {
+      const cls = `tree-edge${ln.dashed ? " dashed" : " spine"}${ln.band ? ` ${ln.band}` : ""}`;
+      const marker = ln.dashed ? "arrowMuted" : "arrow";
+      return `<path class="${cls}" d="${ln.d}" marker-end="url(#${marker})"><title>${escapeHtml(ln.title)}</title></path>`;
+    })
     .join("");
 
   let rowLabels = "";
@@ -424,21 +620,16 @@ function renderDecomp(rawData) {
     rowLabels += `<text class="tree-level-label" x="${padX}" y="${labelY}">${escapeHtml(LEVEL_TITLES[row.lvl])}</text>`;
     for (const n of row.nodes) {
       const p = pos.get(n.id);
-      const derived = parentLabels(n.id);
       const nameLines = wrapLines(shortLabel(n), maxNameChars, 2);
-      const subRaw =
-        derived.length && row.lvl !== 1
-          ? `← ${derived.join(", ")}`
-          : String(n.id);
-      const subLines = wrapLines(subRaw, maxSubChars, 2);
-      const nameStartY = nameLines.length === 1 ? 20 : 16;
-      const subStartY = nameLines.length === 1 ? 40 : 44;
+      const subLines = wrapLines(String(n.id), maxSubChars, 1);
+      const nameStartY = nameLines.length === 1 ? 20 : 15;
+      const subStartY = nameLines.length === 1 ? 38 : 40;
       const focused = focusId && n.id === focusId ? " focused" : "";
       boxes += `
         <g class="tree-node${focused}" data-id="${escapeHtml(n.id)}" transform="translate(${p.x},${p.y})" role="button" tabindex="0">
           <rect width="${boxW}" height="${boxH}" rx="6" class="tree-box l${row.lvl}" />
-          ${svgTextBlock("tree-name", nameLines, boxW / 2, nameStartY, 13)}
-          ${svgTextBlock("tree-sub", subLines, boxW / 2, subStartY, 11)}
+          ${svgTextBlock("tree-name", nameLines, boxW / 2, nameStartY, 11)}
+          ${svgTextBlock("tree-sub", subLines, boxW / 2, subStartY, 10)}
           <title>${escapeHtml(n.name || n.id)} (${escapeHtml(n.id)}) — click to focus subtree</title>
         </g>`;
     }
@@ -455,24 +646,45 @@ function renderDecomp(rawData) {
   const kindNote = data.rootKind
     ? ` · root <code>${escapeHtml(data.rootKind)}</code>`
     : "";
+  const spineCount = lines.filter((l) => !l.dashed).length;
+  const assocCount = lines.filter((l) => l.dashed).length;
 
   decompEl.innerHTML = `
     <div class="decomp-panels">
       <div id="decompTreePanel" class="decomp-panel" ${decompView === "tree" ? "" : "hidden"}>
         <p class="decomp-meta"><strong>${escapeHtml(rootLabel)}</strong>
-          <span class="muted">${kindNote}${focusNote} · ${data.pathCount ?? "—"} paths · ${lines.length} parent links drawn</span></p>
-        <p class="legend muted">Click a node to focus its subtree · Solid = hierarchy · dashed = satisfy / perform / measure</p>
-        <div class="tree-scroll">
-          <svg class="decomp-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="ME decomposition tree">
-            <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" class="tree-arrow" />
-              </marker>
-            </defs>
-            <g class="tree-edges">${svgLines}</g>
-            ${rowLabels}
-            <g class="tree-nodes">${boxes}</g>
-          </svg>
+          <span class="muted">${kindNote}${focusNote} · ${spineCount} hierarchy · ${assocCount} next-level links</span></p>
+        <p class="legend muted">
+          <span class="legend-swatch spine"></span> Solid = levels 1–4 hierarchy&nbsp;&nbsp;
+          <span class="legend-swatch band-45"></span> 4→5 solutions&nbsp;&nbsp;
+          <span class="legend-swatch band-56"></span> 5→6 actors&nbsp;&nbsp;
+          <span class="legend-swatch band-67"></span> 6→7 measures&nbsp;&nbsp;
+          · next-level only · click a node to focus
+        </p>
+        <div class="tree-viewport">
+          <div class="tree-toolbar row">
+            <button type="button" id="treeZoomOut" class="secondary" aria-label="Zoom out">−</button>
+            <button type="button" id="treeZoomIn" class="secondary" aria-label="Zoom in">+</button>
+            <button type="button" id="treeZoomFit" class="secondary">Fit</button>
+            <button type="button" id="treeZoomReset" class="secondary">100%</button>
+            <span id="treeZoomLabel" class="muted tree-zoom-label">100%</span>
+            <span class="muted tiny">Drag background to pan · Ctrl/⌘ + scroll to zoom</span>
+          </div>
+          <div class="tree-scroll" id="treeScroll">
+            <svg class="decomp-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="ME decomposition tree">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" class="tree-arrow" />
+                </marker>
+                <marker id="arrowMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" class="tree-arrow muted" />
+                </marker>
+              </defs>
+              <g class="tree-edges">${svgLines}</g>
+              ${rowLabels}
+              <g class="tree-nodes">${boxes}</g>
+            </svg>
+          </div>
         </div>
         <details class="edges"><summary>Relationship list (${edges.length})</summary><ul>
           ${edges
@@ -501,6 +713,18 @@ function renderDecomp(rawData) {
       }
     });
   }
+
+  lastTreeSize = { w: width, h: height };
+  const keepZoom = Boolean(focusId);
+  wireTreeViewport();
+  requestAnimationFrame(() => {
+    const scroll = document.getElementById("treeScroll");
+    if (!keepZoom && scroll && lastTreeSize.w > scroll.clientWidth - 24) {
+      fitTreeZoom();
+    } else {
+      applyTreeZoom();
+    }
+  });
 
   if (decompView === "table") {
     ensureTableLoaded();

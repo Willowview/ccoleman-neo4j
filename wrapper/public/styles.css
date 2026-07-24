@@ -629,13 +629,37 @@ button {
   font-size: 0.85rem;
 }
 
+.tree-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tree-toolbar {
+  align-items: center;
+  margin: 0;
+}
+
+.tree-zoom-label {
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .tree-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
+  max-height: min(92vh, 1200px);
+  min-height: 560px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   padding: 0.5rem;
+  cursor: grab;
+  overscroll-behavior: contain;
+}
+
+.tree-scroll.panning {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .decomp-svg {
@@ -647,17 +671,70 @@ button {
   fill: none;
   stroke: var(--accent);
   stroke-width: 2;
-  opacity: 0.85;
+  opacity: 0.9;
+}
+
+.tree-edge.spine {
+  stroke: var(--accent);
+  stroke-width: 2.25;
+  opacity: 0.95;
 }
 
 .tree-edge.dashed {
-  stroke-dasharray: 6 4;
-  stroke: var(--muted);
-  opacity: 0.9;
+  stroke-dasharray: 4 5;
+  stroke-width: 1.5;
+  opacity: 0.75;
+}
+
+.tree-edge.dashed.band-45 {
+  stroke: #d97706;
+}
+
+.tree-edge.dashed.band-56 {
+  stroke: #059669;
+}
+
+.tree-edge.dashed.band-67 {
+  stroke: #dc2626;
 }
 
 .tree-arrow {
   fill: var(--accent);
+}
+
+.tree-arrow.muted {
+  fill: #94a3b8;
+  opacity: 0.85;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 1.4rem;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  vertical-align: middle;
+  margin-right: 0.25rem;
+}
+
+.legend-swatch.dashed {
+  border-top-style: dashed;
+  border-top-color: var(--muted);
+  border-top-width: 1.5px;
+}
+
+.legend-swatch.band-45 {
+  border-top-style: dashed;
+  border-top-color: #d97706;
+}
+
+.legend-swatch.band-56 {
+  border-top-style: dashed;
+  border-top-color: #059669;
+}
+
+.legend-swatch.band-67 {
+  border-top-style: dashed;
+  border-top-color: #dc2626;
 }
 
 .tree-level-label {
@@ -699,14 +776,14 @@ button {
 
 .tree-name {
   fill: var(--text);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
   pointer-events: none;
 }
 
 .tree-sub {
   fill: var(--accent);
-  font-size: 9px;
+  font-size: 8.5px;
   pointer-events: none;
 }
 
