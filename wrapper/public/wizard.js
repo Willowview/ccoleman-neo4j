@@ -3,6 +3,9 @@
  * Calls existing POST /nodes; does not change decomp view behavior.
  */
 
+import { withBase } from "./base-path.js";
+
+
 const state = {
   step: 0,
   kopId: null,
@@ -108,7 +111,7 @@ const addBtn = document.getElementById("addBtn");
 const nextBtn = document.getElementById("nextBtn");
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -156,7 +159,7 @@ function renderSession() {
     .join("\n");
   if (state.kopId) {
     doneLinks.hidden = false;
-    viewDecomp.href = `/?kopId=${encodeURIComponent(state.kopId)}`;
+    viewDecomp.href = withBase(`/?kopId=${encodeURIComponent(state.kopId)}`);
   }
 }
 

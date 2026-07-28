@@ -18,6 +18,23 @@ const URI = process.env.NEO4J_URI || "bolt://localhost:7688";
 const USER = process.env.NEO4J_USER || "neo4j";
 const PASSWORD = process.env.NEO4J_PASSWORD || "decisive-dev-password";
 
+/** Hardcoded public prefix — ALB path rule /kg-app-2* → this EC2. */
+const APP_ROOT = "/kg-app-2";
+
+function withBase(pathname) {
+  const p = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${APP_ROOT}${p === "/" ? "/" : p}`;
+}
+
+/** Map /kg-app-2/... → /... for internal routing. */
+function stripBase(pathname) {
+  if (pathname === APP_ROOT || pathname === `${APP_ROOT}/`) return "/";
+  if (pathname.startsWith(`${APP_ROOT}/`)) {
+    return pathname.slice(APP_ROOT.length) || "/";
+  }
+  return null;
+}
+
 /** Lab UI login (POC only — not SIPR-grade auth). */
 const LAB_USER = process.env.LAB_USER || "Admin";
 const LAB_PASSWORD = process.env.LAB_PASSWORD || "AdminPass123";
@@ -84,10 +101,10 @@ function toPlain(value) {
 
 function json(res, status, body) {
   const payload = JSON.stringify(toPlain(body));
-  res.writeHead(status, {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  });
+  // Use setHeader (not writeHead with a fresh object) so a prior Set-Cookie is kept.
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.end(payload);
 }
 
@@ -104,18 +121,22 @@ function parseCookies(req) {
   return out;
 }
 
+function cookiePath() {
+  return APP_ROOT;
+}
+
 function setSessionCookie(res, token) {
   const maxAge = Math.floor(SESSION_TTL_MS / 1000);
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=${cookiePath()}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
   );
 }
 
 function clearSessionCookie(res) {
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+    `${SESSION_COOKIE}=; Path=${cookiePath()}; HttpOnly; SameSite=Lax; Max-Age=0`,
   );
 }
 
@@ -163,7 +184,8 @@ function isPublicPath(pathname) {
     pathname === "/login" ||
     pathname === "/logout" ||
     pathname === "/health" ||
-    pathname === "/styles.css"
+    pathname === "/styles.css" ||
+    pathname === "/base-path.js"
   );
 }
 
@@ -172,7 +194,7 @@ function requireAuth(req, res, pathname) {
   const sess = getSession(req);
   if (sess) return true;
   if (wantsHtml(req, pathname)) {
-    res.writeHead(302, { Location: "/login.html" });
+    res.writeHead(302, { Location: withBase("/login.html") });
     res.end();
     return false;
   }
@@ -1771,6 +1793,14 @@ const MIME = {
   ".json": "application/json",
 };
 
+function injectHtmlBase(html) {
+  const snippet = `    <base href="${APP_ROOT}/" />\n    <script>window.APP_BASE=${JSON.stringify(APP_ROOT)};</script>\n`;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (m) => `${m}\n${snippet}`);
+  }
+  return `${snippet}${html}`;
+}
+
 function serveStatic(urlPath, res) {
   let rel = urlPath === "/" ? "/index.html" : urlPath;
   rel = path.normalize(rel).replace(/^(\.\.[/\\])+/, "");
@@ -1784,6 +1814,12 @@ function serveStatic(urlPath, res) {
     return false;
   }
   const ext = path.extname(filePath);
+  if (ext === ".html") {
+    const html = injectHtmlBase(fs.readFileSync(filePath, "utf8"));
+    res.writeHead(200, { "Content-Type": MIME[ext] });
+    res.end(html);
+    return true;
+  }
   res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
   fs.createReadStream(filePath).pipe(res);
   return true;
@@ -1801,14 +1837,45 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
+  const rawPath = url.pathname;
 
-  try {
-    if (req.method === "GET" && url.pathname === "/login") {
-      res.writeHead(302, { Location: "/login.html" });
+  // Health must work without a session (ALB target checks + curl).
+  if (
+    req.method === "GET" &&
+    (rawPath === `${APP_ROOT}/health` || rawPath === "/health")
+  ) {
+    try {
+      json(res, 200, await health());
+    } catch (err) {
+      json(res, err.status || 500, {
+        error: "server_error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return;
+  }
+
+  const pathname = stripBase(rawPath);
+  if (pathname === null) {
+    if (req.method === "GET" && wantsHtml(req, rawPath)) {
+      res.writeHead(302, { Location: `${APP_ROOT}/` });
       res.end();
       return;
     }
-    if (req.method === "POST" && url.pathname === "/login") {
+    json(res, 404, {
+      error: "not_found",
+      message: `This app lives under ${APP_ROOT}/`,
+    });
+    return;
+  }
+
+  try {
+    if (req.method === "GET" && pathname === "/login") {
+      res.writeHead(302, { Location: withBase("/login.html") });
+      res.end();
+      return;
+    }
+    if (req.method === "POST" && pathname === "/login") {
       const body = await readBody(req);
       const username = String(body.username || "").trim();
       const password = String(body.password || "");
@@ -1829,13 +1896,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (
       (req.method === "GET" || req.method === "POST") &&
-      url.pathname === "/logout"
+      pathname === "/logout"
     ) {
       const sess = getSession(req);
       if (sess) destroySession(sess.token);
       clearSessionCookie(res);
-      if (req.method === "GET" || wantsHtml(req, url.pathname)) {
-        res.writeHead(302, { Location: "/login.html" });
+      if (req.method === "GET" || wantsHtml(req, pathname)) {
+        res.writeHead(302, { Location: withBase("/login.html") });
         res.end();
         return;
       }
@@ -1843,32 +1910,32 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (!requireAuth(req, res, url.pathname)) return;
+    if (!requireAuth(req, res, pathname)) return;
 
-    if (req.method === "GET" && url.pathname === "/health") {
+    if (req.method === "GET" && pathname === "/health") {
       json(res, 200, await health());
       return;
     }
-    if (req.method === "GET" && url.pathname === "/auth/me") {
+    if (req.method === "GET" && pathname === "/auth/me") {
       const sess = getSession(req);
       json(res, 200, { user: sess?.user || null });
       return;
     }
-    if (req.method === "POST" && url.pathname === "/seed") {
+    if (req.method === "POST" && pathname === "/seed") {
       json(res, 200, await seedDemo());
       return;
     }
-    if (req.method === "GET" && url.pathname === "/kops") {
+    if (req.method === "GET" && pathname === "/kops") {
       json(res, 200, { kops: await listKops() });
       return;
     }
-    if (req.method === "GET" && url.pathname === "/decomp-roots") {
+    if (req.method === "GET" && pathname === "/decomp-roots") {
       const kind = url.searchParams.get("kind") || "KOP";
       json(res, 200, await listDecompRoots(kind));
       return;
     }
-    if (req.method === "GET" && url.pathname.startsWith("/decomp/")) {
-      const rest = decodeURIComponent(url.pathname.slice("/decomp/".length));
+    if (req.method === "GET" && pathname.startsWith("/decomp/")) {
+      const rest = decodeURIComponent(pathname.slice("/decomp/".length));
       if (rest.endsWith("/table")) {
         const rootId = rest.slice(0, -"/table".length).replace(/\/$/, "");
         json(res, 200, await decompTable(rootId));
@@ -1877,29 +1944,29 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, await decompFrom(rest));
       return;
     }
-    if (req.method === "POST" && url.pathname === "/nodes") {
+    if (req.method === "POST" && pathname === "/nodes") {
       const body = await readBody(req);
       json(res, 201, await createNode(body));
       return;
     }
-    if (req.method === "GET" && url.pathname === "/nodes") {
+    if (req.method === "GET" && pathname === "/nodes") {
       const q = url.searchParams.get("q") || "";
       const limit = url.searchParams.get("limit") || "500";
       json(res, 200, { nodes: await listAllNodes({ q, limit }) });
       return;
     }
-    if (req.method === "POST" && url.pathname === "/relationships") {
+    if (req.method === "POST" && pathname === "/relationships") {
       const body = await readBody(req);
       json(res, 201, await createRelationship(body));
       return;
     }
-    if (req.method === "DELETE" && url.pathname === "/relationships") {
+    if (req.method === "DELETE" && pathname === "/relationships") {
       const body = await readBody(req);
       json(res, 200, await deleteRelationship(body));
       return;
     }
-    if (url.pathname.startsWith("/nodes/")) {
-      const rest = decodeURIComponent(url.pathname.slice("/nodes/".length));
+    if (pathname.startsWith("/nodes/")) {
+      const rest = decodeURIComponent(pathname.slice("/nodes/".length));
       if (!rest) {
         json(res, 400, { error: "bad_request", message: "node id required" });
         return;
@@ -1937,7 +2004,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
-    if (req.method === "GET" && url.pathname === "/graph") {
+    if (req.method === "GET" && pathname === "/graph") {
       const validatedParam = url.searchParams.get("validatedOnly");
       const validatedOnly =
         validatedParam != null &&
@@ -1955,25 +2022,25 @@ const server = http.createServer(async (req, res) => {
       );
       return;
     }
-    if (req.method === "GET" && url.pathname === "/graph/nodes") {
+    if (req.method === "GET" && pathname === "/graph/nodes") {
       json(res, 200, { nodes: await graphNodes() });
       return;
     }
-    if (req.method === "GET" && url.pathname === "/graph/edges") {
+    if (req.method === "GET" && pathname === "/graph/edges") {
       json(res, 200, { edges: await graphEdges() });
       return;
     }
     if (
       req.method === "GET" &&
-      url.pathname.startsWith("/validation/checklist/")
+      pathname.startsWith("/validation/checklist/")
     ) {
       const kopId = decodeURIComponent(
-        url.pathname.slice("/validation/checklist/".length),
+        pathname.slice("/validation/checklist/".length),
       );
       json(res, 200, await kopChecklist(kopId));
       return;
     }
-    if (req.method === "GET" && url.pathname === "/validation/orphans") {
+    if (req.method === "GET" && pathname === "/validation/orphans") {
       json(
         res,
         200,
@@ -1981,7 +2048,7 @@ const server = http.createServer(async (req, res) => {
       );
       return;
     }
-    if (req.method === "GET" && url.pathname === "/validation/status") {
+    if (req.method === "GET" && pathname === "/validation/status") {
       json(
         res,
         200,
@@ -1993,12 +2060,12 @@ const server = http.createServer(async (req, res) => {
       );
       return;
     }
-    if (req.method === "POST" && url.pathname === "/validation/status") {
+    if (req.method === "POST" && pathname === "/validation/status") {
       const body = await readBody(req);
       json(res, 200, await bulkSetValidationStatus(body));
       return;
     }
-    if (req.method === "GET" && serveStatic(url.pathname, res)) {
+    if (req.method === "GET" && serveStatic(pathname, res)) {
       return;
     }
     json(res, 404, {
@@ -2051,7 +2118,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`decisive-lab neo4j wrapper listening on :${PORT}`);
   console.log(`NEO4J_URI=${URI}`);
-  console.log(`UI http://localhost:${PORT}/`);
+  console.log(`UI http://localhost:${PORT}${APP_ROOT}/`);
 });
 
 async function shutdown() {

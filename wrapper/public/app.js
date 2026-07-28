@@ -1,3 +1,4 @@
+import { withBase } from "./base-path.js";
 const statusEl = document.getElementById("status");
 const rootKindEl = document.getElementById("rootKind");
 const selectEl = document.getElementById("rootSelect");
@@ -72,7 +73,7 @@ function setStatus(msg) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -778,7 +779,7 @@ function cellHtml(key, value) {
   }
   const text = escapeHtml(String(value));
   if (ID_LINK_KEYS.has(key)) {
-    return `<a href="/edit.html?id=${encodeURIComponent(String(value))}">${text}</a>`;
+    return `<a href="${withBase(`/edit.html?id=${encodeURIComponent(String(value))}`)}">${text}</a>`;
   }
   return text;
 }
@@ -948,7 +949,7 @@ function renderKopChecklist(data) {
           ? `<span class="badge ok">Complete</span>`
           : `<span class="badge warn">Missing ${data.missing.join(", ")}</span>`
       }
-      <a href="/validation.html?kopId=${encodeURIComponent(data.objectiveId)}">Details</a>
+      <a href="${withBase(`/validation.html?kopId=${encodeURIComponent(data.objectiveId)}`)}">Details</a>
     </div>`;
 }
 

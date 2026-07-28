@@ -1,3 +1,4 @@
+import { withBase } from "./base-path.js";
 const createOut = document.getElementById("createOut");
 const manageSearch = document.getElementById("manageSearch");
 const manageNodeList = document.getElementById("manageNodeList");
@@ -96,7 +97,7 @@ function escapeHtml(s) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -149,7 +150,7 @@ function renderList(nodes) {
       }</span>`;
     btn.addEventListener("click", () => setSelected(n.id));
     btn.addEventListener("dblclick", () => {
-      window.location.href = `/edit.html?id=${encodeURIComponent(n.id)}`;
+      window.location.href = withBase(`/edit.html?id=${encodeURIComponent(n.id)}`);
     });
     manageNodeList.appendChild(btn);
   }
@@ -235,7 +236,7 @@ manageSearch.addEventListener("input", () => {
 
 openEditBtn.addEventListener("click", () => {
   if (!selectedId) return;
-  window.location.href = `/edit.html?id=${encodeURIComponent(selectedId)}`;
+  window.location.href = withBase(`/edit.html?id=${encodeURIComponent(selectedId)}`);
 });
 
 quickDeleteBtn.addEventListener("click", async () => {

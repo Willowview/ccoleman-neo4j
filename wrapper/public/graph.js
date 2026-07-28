@@ -1,3 +1,4 @@
+import { withBase } from "./base-path.js";
 const statusEl = document.getElementById("graphStatus");
 const metaEl = document.getElementById("graphMeta");
 const searchEl = document.getElementById("graphSearch");
@@ -34,7 +35,7 @@ function escapeHtml(s) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -231,12 +232,12 @@ function setSelection(id) {
       } · ${neighborCount} neighbor(s)</span>
     </div>
     <div class="row graph-actions">
-      <a class="button-link secondary" href="/edit.html?id=${encodeURIComponent(node.id)}">Edit</a>
-      <a class="button-link secondary" href="/edit.html?id=${encodeURIComponent(node.id)}#rels">Relink / relationships</a>
+      <a class="button-link secondary" href="${withBase(`/edit.html?id=${encodeURIComponent(node.id)}`)}">Edit</a>
+      <a class="button-link secondary" href="${withBase(`/edit.html?id=${encodeURIComponent(node.id)}#rels`)}">Relink / relationships</a>
       <button type="button" class="secondary" id="selDeleteBtn">Delete</button>
       ${
         kopId
-          ? `<a class="button-link secondary" href="/?kopId=${encodeURIComponent(kopId)}">KOP decomp</a>`
+          ? `<a class="button-link secondary" href="${withBase(`/?kopId=${encodeURIComponent(kopId)}`)}">KOP decomp</a>`
           : `<span class="muted">No KOP in current graph filter</span>`
       }
     </div>
@@ -273,7 +274,7 @@ function renderNodeList() {
       }</span>`;
     btn.addEventListener("click", () => setSelection(n.id));
     btn.addEventListener("dblclick", () => {
-      window.location.href = `/edit.html?id=${encodeURIComponent(n.id)}`;
+      window.location.href = withBase(`/edit.html?id=${encodeURIComponent(n.id)}`);
     });
     listEl.appendChild(btn);
   }
@@ -393,17 +394,17 @@ function showCtxMenu(ev, nodeId) {
   ctxMenu.style.top = `${Math.min(ev.clientY, window.innerHeight - 180)}px`;
 
   ctxMenu.querySelector('[data-act="edit"]')?.addEventListener("click", () => {
-    window.location.href = `/edit.html?id=${encodeURIComponent(nodeId)}`;
+    window.location.href = withBase(`/edit.html?id=${encodeURIComponent(nodeId)}`);
   });
   ctxMenu.querySelector('[data-act="rels"]')?.addEventListener("click", () => {
-    window.location.href = `/edit.html?id=${encodeURIComponent(nodeId)}#rels`;
+    window.location.href = withBase(`/edit.html?id=${encodeURIComponent(nodeId)}#rels`);
   });
   ctxMenu.querySelector('[data-act="delete"]')?.addEventListener("click", () => {
     hideCtxMenu();
     deleteNode(nodeId);
   });
   ctxMenu.querySelector('[data-act="kop"]')?.addEventListener("click", () => {
-    if (kopId) window.location.href = `/?kopId=${encodeURIComponent(kopId)}`;
+    if (kopId) window.location.href = withBase(`/?kopId=${encodeURIComponent(kopId)}`);
   });
 }
 
@@ -528,7 +529,7 @@ function onDblClick(ev) {
   if (!canvasEl.contains(ev.target)) return;
   const nodeId = hitNodeId(ev);
   if (nodeId) {
-    window.location.href = `/edit.html?id=${encodeURIComponent(nodeId)}`;
+    window.location.href = withBase(`/edit.html?id=${encodeURIComponent(nodeId)}`);
   }
 }
 

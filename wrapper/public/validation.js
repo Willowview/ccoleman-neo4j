@@ -1,3 +1,4 @@
+import { withBase } from "./base-path.js";
 const checkKopSelect = document.getElementById("checkKopSelect");
 const checkKopId = document.getElementById("checkKopId");
 const checkStatus = document.getElementById("checkStatus");
@@ -19,7 +20,7 @@ function escapeHtml(s) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -51,7 +52,7 @@ function renderChecklist(data) {
         .slice(0, 8)
         .map(
           (id) =>
-            `<a href="/edit.html?id=${encodeURIComponent(id)}">${escapeHtml(id)}</a>`,
+            `<a href="${withBase(`/edit.html?id=${encodeURIComponent(id)}`)}">${escapeHtml(id)}</a>`,
         )
         .join(", ");
       return `<tr class="${l.ok ? "row-ok" : "row-missing"}">
@@ -72,7 +73,7 @@ function renderChecklist(data) {
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <p class="muted"><a href="/?kopId=${encodeURIComponent(data.objectiveId)}">Open KOP decomp</a></p>`;
+    <p class="muted"><a href="${withBase(`/?kopId=${encodeURIComponent(data.objectiveId)}`)}">Open KOP decomp</a></p>`;
 }
 
 async function runChecklist() {
@@ -110,7 +111,7 @@ async function loadOrphans() {
     for (const n of data.orphans) {
       const a = document.createElement("a");
       a.className = "node-list-item";
-      a.href = `/edit.html?id=${encodeURIComponent(n.id)}`;
+      a.href = withBase(`/edit.html?id=${encodeURIComponent(n.id)}`);
       a.innerHTML = `<strong>${escapeHtml(n.name || n.id)}</strong>
         <span>${escapeHtml(n.id)} · ${escapeHtml((n.labels || []).join(", "))}${
           n.meLevel ? ` · ${escapeHtml(n.meLevel)}` : ""

@@ -1,3 +1,4 @@
+import { withBase } from "./base-path.js";
 const statusEl = document.getElementById("editStatus");
 const formEl = document.getElementById("editForm");
 const idEl = document.getElementById("editId");
@@ -24,7 +25,7 @@ function escapeHtml(s) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const res = await fetch(withBase(path), opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || res.statusText);
   return data;
@@ -156,7 +157,7 @@ function renderRels(data) {
           <span class="muted"> · ${escapeHtml(r.direction)} · ${escapeHtml(r.otherName || r.otherId)}</span>
         </div>
         <div class="rel-actions">
-          <a class="secondary-link" href="/edit.html?id=${encodeURIComponent(r.otherId)}">Open other</a>
+          <a class="secondary-link" href="${withBase(`/edit.html?id=${encodeURIComponent(r.otherId)}`)}">Open other</a>
           <button type="button" class="secondary rel-delete"
             data-from="${escapeHtml(r.source)}"
             data-to="${escapeHtml(r.target)}"
